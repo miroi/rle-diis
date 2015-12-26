@@ -1,0 +1,6 @@
+if(LAPACK_FOUND)
+    add_executable(example test.F90)
+    target_link_libraries(example ${LAPACK_LIBRARIES})
+else()
+    message(FATAL_ERROR "LAPACK library not found")
+endif()
