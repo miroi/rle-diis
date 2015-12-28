@@ -2,9 +2,9 @@
 module equations
 
 integer, parameter :: k  = 4, m = 3, verb=3, max_iter=30
-real*8, allocatable :: a(:),a_s(:), resid_vect(:),a_m(:),sigma(:),bta(:),ttbta(:),ttbta_m(:)
-real*8, allocatable :: T(:,:),t_s(:)
-real*8, allocatable :: B(:,:),B_s(:,:),BT(:,:),BTBT(:,:),TTBTBT(:,:)
+real*8, allocatable :: a(:),a_s(:), resid_vect(:),a_m(:),sigma(:),bta(:)
+real*8, allocatable :: T(:,:),t_s(:),tta(:),ttbta(:),ttbta_m(:),t_mp1(:)
+real*8, allocatable :: B(:,:),B_s(:,:),BT(:,:),BTBT(:,:),TTBTBT(:,:),TTB(:,:)
 integer, allocatable :: ipiv(:)
 real*8 :: resid
 real*8, external :: dnrm2
@@ -12,8 +12,8 @@ real*8, external :: dnrm2
 contains
 
 subroutine allocate_vars
- allocate(a(k),a_s(k),t_s(k),a_m(k),sigma(k), bta(k),ttbta(m),ttbta_m(m))
- allocate(B(k,k),B_s(k,k))
+ allocate(a(k),a_s(k),t_s(k),a_m(k),sigma(k),bta(k),ttbta(m),ttbta_m(m))
+ allocate(B(k,k),B_s(k,k),TTB(m,k),t_mp1(m))
  allocate(T(k,m),BT(k,m),BTBT(k,m),TTBTBT(m,m))
  allocate(ipiv(k))
 end subroutine
@@ -128,12 +128,40 @@ subroutine solve_diis
   sigma = ttbta_m
   print *,'sigma vector:',sigma
 
+end subroutine
+
+
+subroutine solve_rle
+! solve  T^T.a + T^T.B.T.sigma = 0 
+! to get sigma (m) vector
+
+! get T^T.a into ttbta
+  call dgemv('t', k, m, 1.0D0, T, k, a_s, 1, +0.0D0, ttbta, 1)
+  print *,'T^T(m,k).a(k) = ttbta(m):',ttbta
+
+! get T^T.B into TTB
+  call dgemm('t', 'n', m, k, k, 1.0D0, T, k, B_s, k, 0.0D0, TTB, m)
+  print *,'T^T(m,k) .B(k,k) =  TTB(m,k) :',TTB
+
+! get TTB.T into TTBTBT
+  call dgemm('n', 'n', m, m, k, 1.0D0, TTB, k, T, k, 0.0D0, TTBTBT, m)
+  print *,'TTB(m,k).T(k,m) = TTBTBT(m,m):',TTBTBT
+
+! we left with ttbta(m) + TTBTBT(m,m).sigma(m) = 0 to get sigma
+  ttbta_m = -ttbta
+  call dgesv( m, 1, TTBTBT , m, ipiv, ttbta_m, m, info )
+  if (info.gt.0) print *,"error in dgesv routine !"
+  sigma = ttbta_m
+  print *,'sigma vector:',sigma
 
 
 end subroutine
 
 subroutine update_sigma_t
-! using sigma vector and T get new estimate of T
+! using calculated sigma vector and the T matrix get new estimate of sigma.T, T[m+1]
+! get  T(k,m).sigma(m) =  t_mp1(m)
+  call dgemv('n', k, m, 1.0D0, T, k, sigma, 1, +0.0D0, t_mp1, 1)
+  print *,'new t[m+1] obtained as T(k,m).sigma(m) = t_mp1(m):',t_mp1
 
 end subroutine
 
@@ -173,8 +201,8 @@ iter = iter + 1
 call solve_a_Bt_lineq
 
 if (iter > k) then 
-  call solve_diis
-  !call solve_rle
+  !call solve_diis ! ... some error in routine ...
+  call solve_rle
   call update_sigma_t
 endif
 
