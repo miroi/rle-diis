@@ -1,10 +1,10 @@
 
 module equations
 
-integer, parameter :: k  = 10, m = 5, verb=3, max_iter=100
-real*8, allocatable :: a(:),a_s(:), resid_vect(:),a_m(:)
+integer, parameter :: k  = 10, m = 5, verb=3, max_iter=30
+real*8, allocatable :: a(:),a_s(:), resid_vect(:),a_m(:),sigma(:),bta(:),ttbta(:),ttbta_m(:)
 real*8, allocatable :: T(:,:),t_s(:)
-real*8, allocatable :: B(:,:),B_s(:,:)
+real*8, allocatable :: B(:,:),B_s(:,:),BT(:,:),BTBT(:,:)
 integer, allocatable :: ipiv(:)
 real*8 :: resid
 real*8, external :: dnrm2
@@ -12,9 +12,9 @@ real*8, external :: dnrm2
 contains
 
 subroutine allocate_vars
- allocate(a(k),a_s(k),t_s(k),a_m(k))
+ allocate(a(k),a_s(k),t_s(k),a_m(k),sigma(k), bta(k),ttbta(m),ttbta_m(m))
  allocate(B(k,k),B_s(k,k))
- allocate(T(k,m))
+ allocate(T(k,m),BT(k,m),BTBT(k,m))
  allocate(ipiv(k))
 end subroutine
 
@@ -96,11 +96,48 @@ subroutine solve_a_Bt_lineq
 
 end subroutine
 
+subroutine solve_diis
+  integer :: info
+! Solve  T^T.B^T.a + T^T.B^T.B.T.sigma = 0 for sigma vector
+! the B matrix and the a vector are given
+
+! get vector B^T.a = bta
+  call dgemv('t', k, k, 1.0D0, B_s, k, a_s, 1, +0.0D0, bta, 1)
+  print *,'bta=B^T.a:',bta
+
+! get T^T.bta = ttbta
+  call dgemv('t', k, m, 1.0D0, T, k, bta, 1, +0.0D0, ttbta, 1)
+  print *,'T^T.bta = ttbta:',ttbta
+
+! get B.T into BT
+  call dgemm('n', 'n', k, k, m, 1.0D0, B_s, k, T, k, 0.0D0, BT, k)
+  print *,'B.T=',BT
+
+! get B^T . BT into BTBT
+  call dgemm('t', 'n', k, k, m, 1.0D0, B_s, k, BT, k, 0.0D0, BTBT, k)
+  print *,'B^T . BT=BTBT:',BTBT
+
+! get T^T.BTBT into BT
+  call dgemm('t', 'n', k, k, m, 1.0D0, T, k, BTBT, k, 0.0D0, BT, k)
+  print *,'T^T.BTBT = BT',BT
+
+! we left with ttbta + BT.sigma = 0 to get sigma
+  ttbta_m = ttbta
+  call dgesv( m, 1, BT , k, ipiv, ttbta_m, k, info )
+  if (info.gt.0) print *,"error in dgesv routine !"
+
+
+
+end subroutine
+
+subroutine update_sigma_t
+! using sigma vector and T get new estimate of T
+
+end subroutine
+
 subroutine get_resid
 ! calculates the norm of the residuum vector resid =  |a+B.t|
-
   !print *,"get_resid:  get B_s.t_s + a_s into a_s"
-
  ! get vector B_s.t_s + a_s into a_s
   call dgemv('n', k, k, 1.0D0, B_s, k, t_s, 1, +1.0D0, a_s, 1)
   !print *,'zero matrix, B.t+a',a_s
@@ -129,15 +166,22 @@ call init_t
 call update_a_B
 
 do while ( do_iter) 
-call solve_a_Bt_lineq
-call update_a_B
+iter = iter + 1
 
+call solve_a_Bt_lineq
+
+if (iter > k) then 
+  call solve_diis
+  !call solve_rle
+  call update_sigma_t
+endif
+
+call update_a_B
 call get_resid
 print *,'iter=',iter,' resid=', resid
 
-iter = iter + 1
-
 do_iter = resid > 0.00002 .and. iter < max_iter
+
 enddo
 
 
