@@ -1,10 +1,10 @@
 
 module equations
 
-integer, parameter :: k  = 10, m = 5, verb=3, max_iter=30
+integer, parameter :: k  = 4, m = 3, verb=3, max_iter=30
 real*8, allocatable :: a(:),a_s(:), resid_vect(:),a_m(:),sigma(:),bta(:),ttbta(:),ttbta_m(:)
 real*8, allocatable :: T(:,:),t_s(:)
-real*8, allocatable :: B(:,:),B_s(:,:),BT(:,:),BTBT(:,:)
+real*8, allocatable :: B(:,:),B_s(:,:),BT(:,:),BTBT(:,:),TTBTBT(:,:)
 integer, allocatable :: ipiv(:)
 real*8 :: resid
 real*8, external :: dnrm2
@@ -14,7 +14,7 @@ contains
 subroutine allocate_vars
  allocate(a(k),a_s(k),t_s(k),a_m(k),sigma(k), bta(k),ttbta(m),ttbta_m(m))
  allocate(B(k,k),B_s(k,k))
- allocate(T(k,m),BT(k,m),BTBT(k,m))
+ allocate(T(k,m),BT(k,m),BTBT(k,m),TTBTBT(m,m))
  allocate(ipiv(k))
 end subroutine
 
@@ -77,8 +77,8 @@ subroutine solve_a_Bt_lineq
   call dgesv( k, 1, B , k, ipiv, a_m, k , info )
   if (info.gt.0) stop "error in dgesv routine !"
 
-  if (verb >= 3) then
-     !print *,'roots of a+Bt=0, t:',a_m
+  if (verb >= 4) then
+     print *,'roots of a+Bt=0, t:',a_m
   endif
 
 ! fill roots : -a to T(k,m), shift columns to the left
@@ -111,20 +111,22 @@ subroutine solve_diis
 
 ! get B.T into BT
   call dgemm('n', 'n', k, k, m, 1.0D0, B_s, k, T, k, 0.0D0, BT, k)
-  print *,'B.T=',BT
+  print *,'B.T=BT(k,m)=',BT
 
 ! get B^T . BT into BTBT
   call dgemm('t', 'n', k, k, m, 1.0D0, B_s, k, BT, k, 0.0D0, BTBT, k)
-  print *,'B^T . BT=BTBT:',BTBT
+  print *,'B^T(k,k) . BT(k,m)=BTBT(k,m):',BTBT
 
 ! get T^T.BTBT into BT
-  call dgemm('t', 'n', k, k, m, 1.0D0, T, k, BTBT, k, 0.0D0, BT, k)
-  print *,'T^T.BTBT = BT',BT
+  call dgemm('t', 'n', m, k, m, 1.0D0, T, m, BTBT, k, 0.0D0, TTBTBT, m)
+  print *,'T^T(m,k).BTBT(k,m) = TTBTBT(m,m)',TTBTBT
 
-! we left with ttbta + BT.sigma = 0 to get sigma
-  ttbta_m = ttbta
-  call dgesv( m, 1, BT , k, ipiv, ttbta_m, k, info )
+! we left with ttbta + TTBTBT.sigma = 0 to get sigma
+  ttbta_m = -ttbta
+  call dgesv( m, 1, BT , m, ipiv, ttbta_m, m, info )
   if (info.gt.0) print *,"error in dgesv routine !"
+  sigma = ttbta_m
+  print *,'sigma vector:',sigma
 
 
 
