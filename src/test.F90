@@ -111,19 +111,19 @@ subroutine solve_diis
 
 ! get B.T into BT
   call dgemm('n', 'n', k, k, m, 1.0D0, B_s, k, T, k, 0.0D0, BT, k)
-  print *,'B.T=BT(k,m)=',BT
+  print *,'B(k,k).T(k,m)=BT(k,m)=',BT
 
 ! get B^T . BT into BTBT
   call dgemm('t', 'n', k, k, m, 1.0D0, B_s, k, BT, k, 0.0D0, BTBT, k)
-  print *,'B^T(k,k) . BT(k,m)=BTBT(k,m):',BTBT
+  print *,'B^T(k,k) . BT(k,m) = BTBT(k,m):',BTBT
 
-! get T^T.BTBT into BT
-  call dgemm('t', 'n', m, k, m, 1.0D0, T, m, BTBT, k, 0.0D0, TTBTBT, m)
+! get T^T.BTBT into TTBTBT
+  call dgemm('t', 'n', k, k, m, 1.0D0, T, k, BTBT, k, 0.0D0, TTBTBT, m)
   print *,'T^T(m,k).BTBT(k,m) = TTBTBT(m,m)',TTBTBT
 
 ! we left with ttbta + TTBTBT.sigma = 0 to get sigma
   ttbta_m = -ttbta
-  call dgesv( m, 1, BT , m, ipiv, ttbta_m, m, info )
+  call dgesv( m, 1, TTBTBT , m, ipiv, ttbta_m, m, info )
   if (info.gt.0) print *,"error in dgesv routine !"
   sigma = ttbta_m
   print *,'sigma vector:',sigma
