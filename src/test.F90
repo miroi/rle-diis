@@ -13,7 +13,7 @@ contains
 
 subroutine allocate_vars
  allocate(a(k),a_s(k),t_s(k),a_m(k),sigma(k),bta(k),ttbta(m),ttbta_m(m))
- allocate(B(k,k),B_s(k,k),TTB(m,k),t_mp1(m))
+ allocate(B(k,k),B_s(k,k),TTB(m,k),t_mp1(k))
  allocate(T(k,m),BT(k,m),BTBT(k,m),TTBTBT(m,m))
  allocate(ipiv(k))
 end subroutine
@@ -88,7 +88,7 @@ subroutine solve_a_Bt_lineq
  enddo
  enddo
 
-! 1st column: a_m to T(:,m)
+! last column: a_m to T(:,m)
  do i=1,k
    T(i,m) = a_m(i); t_s(i)=T(i,m)
  enddo
@@ -161,7 +161,10 @@ subroutine update_sigma_t
 ! using calculated sigma vector and the T matrix get new estimate of sigma.T, T[m+1]
 ! get  T(k,m).sigma(m) =  t_mp1(m)
   call dgemv('n', k, m, 1.0D0, T, k, sigma, 1, +0.0D0, t_mp1, 1)
-  print *,'new t[m+1] obtained as T(k,m).sigma(m) = t_mp1(m):',t_mp1
+  print *,'new t[m+1] obtained as T(k,m).sigma(m) = t_mp1(k):',t_mp1
+  print *,'previous t(m):',T(:,m)
+
+! now load new T[m+1] into T, before move shift columns left
 
 end subroutine
 
@@ -186,7 +189,9 @@ end module equations
 
 Program Test_RLE_DIIS
 use equations
-logical :: do_iter=.true.
+logical :: do_iter=.true. 
+!logical :: do_accelerate = .true.
+logical :: do_accelerate = .false.
 
 integer :: iter = 0
 
@@ -200,7 +205,7 @@ iter = iter + 1
 
 call solve_a_Bt_lineq
 
-if (iter > k) then 
+if (iter > k .and. do_accelerate) then 
   !call solve_diis ! ... some error in routine ...
   call solve_rle
   call update_sigma_t
